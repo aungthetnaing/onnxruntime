@@ -252,6 +252,15 @@ class GraphExecutionManager(ABC):
         assert self._export_mode is not None, "Please use a concrete instance of ExecutionManager"
 
         try:
+
+            # TODO: Improve how Apollo is detected. Options include:
+            #       Apollo extends ORTModule and change export on their implementation
+            #       ORTModule exposes export configuration for advanced users
+            export_modules_as_functions = False
+            if self._device.type == 'ort:maia_apollo':
+                import onnxruntime_maia as maia
+                export_modules_as_functions = maia.get_supported_modules()
+
             with torch.no_grad(), _logger.suppress_os_stream_output(log_level=self._loglevel):
                 torch.onnx.export(self._flattened_module,
                                   sample_inputs_as_tuple,
@@ -264,7 +273,8 @@ class GraphExecutionManager(ABC):
                                   dynamic_axes=self._input_info.dynamic_axes,
                                   verbose=self._loglevel < _logger.LogLevel.WARNING,
                                   export_params=False,
-                                  keep_initializers_as_inputs=True)
+                                  keep_initializers_as_inputs=True,
+                                  export_modules_as_functions=export_modules_as_functions)
         except RuntimeError as e:
             raise RuntimeError('There was an error while exporting the PyTorch model to ONNX: {}'.format(e))
 
@@ -323,5 +333,5 @@ class GraphExecutionManager(ABC):
 
         # Initializers can be cached and used since they are expected not to be re-instantiated
         # between forward calls.
-        self._graph_initializers = [param for name, param in self._flattened_module.named_parameters() 
+        self._graph_initializers = [param for name, param in self._flattened_module.named_parameters()
                                     if name in self._graph_initializer_names]

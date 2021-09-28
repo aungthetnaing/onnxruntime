@@ -123,6 +123,27 @@ static std::optional<wgi::BitmapBounds> GetBoundsFromMetadata(const wfc::IProper
   return {};
 }
 
+static bool GetBoundOptionWholeImageFromMetadata(const wfc::IPropertySet& properties) {
+  if (properties != nullptr && properties.HasKey(L"BitmapBoundWholeImage")) {
+    if (auto boundsInspectable = properties.Lookup(L"BitmapBoundWholeImage")) {
+      auto boundsPropertyValue = boundsInspectable.as<wf::IPropertyValue>();
+      WINML_THROW_HR_IF_FALSE_MSG(
+          WINML_ERR_INVALID_BINDING,
+          boundsPropertyValue.Type() == wf::PropertyType::Boolean,
+          "BitmapBoundWholeImage must reference a property value with type Boolean.");
+      bool boundOption = false;
+      WINML_THROW_HR_IF_FALSE_MSG(
+          WINML_ERR_INVALID_BINDING,
+          boundOption = boundsPropertyValue.GetBoolean(),
+          "BitmapBoundWholeImage must reference a property value with type Boolean.");
+
+      return boundOption;
+    }
+  }
+
+  return false;
+}
+
 wgi::BitmapBounds ImageFeatureValue::CenterAndCropBounds(
     uint32_t idx,
     uint32_t desiredWidth,
@@ -353,9 +374,8 @@ std::optional<ImageFeatureValue::ImageResourceMetadata> ImageFeatureValue::GetIn
     if (!tempBounds.has_value()) {
       // If the user has not specified bounds, we need to infer the bounds
       // from the combination of descriptor, and input value or output value
-      if (context.type == _winml::BindingType::kInput) {
-        // If unspecified output, get the crop with correct aspect ratio
-        tempBounds = CenterAndCropBounds(i, descriptorWidth, descriptorHeight);
+      if (context.type == _winml::BindingType::kInput && !GetBoundOptionWholeImageFromMetadata(context.properties)) {
+         tempBounds = CenterAndCropBounds(i, descriptorWidth, descriptorHeight);
       } else {
         // If given an unspecified output region, write into the top left portion of the output image.
         tempBounds = wgi::BitmapBounds{0, 0, m_widths[i], m_heights[i]};
